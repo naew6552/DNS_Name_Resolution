@@ -9,6 +9,7 @@
  *		Have those threads print something.
  *	2. Do the same thing for requester threads
  *	3. Figure out structs for each?
+ *	4. Clean up #define's
  *
  ******************************************************************************/
 
@@ -37,7 +38,7 @@
 
 
 //Requester Thread routine, reads from name file and adds names to queue
-void* requester_routine(*void request)
+void* requester_routine(void* request)
 {
        /* Open the file from the filepointer stored in request.
 	* 	use while loop for loop throuhg each line of file
@@ -49,10 +50,33 @@ void* requester_routine(*void request)
 	*	V(mutex), V(full). the V(full) tells the resolver threads
 	*	that there is a name in the queue to resolve
 	*/
+	
+        // Currently, request is going to be used as the threadID
+	// This code has been taken from pthread_hello.c as test code.
+	long tid = (long)request;
+	long t;
+	//long numprint = 3;
+
+	/*
+        * Print hello numprint times *
+	for(t=0; t<numprint; t++)
+        {
+		printf("Hello World! It's me, thread #%ld! "
+                   "This is printout %ld of %ld\n",
+                   *tid, (t+1), numprint);
+                * Sleep for 1 to 2 Seconds *
+                usleep((rand()%100)*10000+1000000);
+        } */
+	
+	printf("Hello World! It's me, thread #%ld!\n", tid);
+	pthread_exit(NULL);	
+
+	/* Exit, Returning NULL*/
+	//return NULL;
 }
 
 // Resolver thread routine, will grab name's DNS, and write to result.txt
-void* resolver_routine(*void resolve)
+void* resolver_routine(void* resolve)
 {
        /* first, grab a name from the resuest queue. To do this, full is = 0 initially.
 	*	When requester_routine runs, it will V(full) which means there is a name to grab.
@@ -69,6 +93,31 @@ void* resolver_routine(*void resolve)
 	*	V(mutex2) to protect it.
 	*
 	*/
+
+        // Currently, request is going to be used as the threadID
+	// This code has been taken from pthread_hello.c as test code.
+        long tid = (long)resolve;
+        long t;
+        long numprint = 3;
+
+	/*
+        * Print hello numprint times *
+        for(t=0; t<numprint; t++)
+        {
+                printf("Hello World! It's me, thread #%ld! "
+                   "This is printout %ld of %ld\n",
+                   *tid, (t+1), numprint);
+                * Sleep for 1 to 2 Seconds *
+                usleep((rand()%100)*10000+1000000);
+        }
+	*/
+
+	printf("Hello World! It's me, thread #%ld!\n", tid);
+        pthread_exit(NULL);
+
+        /* Exit, Returning NULL*/
+        //return NULL;
+
 }
 
 int main(int argc, char* argv[])
@@ -89,4 +138,38 @@ int main(int argc, char* argv[])
 	 * 
 	 * 		
 	 */
+
+	//this stores the threads? 
+	pthread_t resolver_threads[NUM_THREADS]; //used to store the identifiers for the threads
+	pthread_t requester_threads[NUM_THREADS];
+	int rc; // used for error checking, stands for return code
+	long t; // Keeps track of which thread we're dealing with
+	long resolve_cpyt[NUM_THREADS]; //I don't know what this does
+	long request_cpyt[NUM_THREADS];
+	
+	for(t = 0; t < NUM_THREADS; t++)
+	{
+		printf("In main: creating thread %ld\n", t);
+		resolve_cpyt[t] = t;
+		pthread_create(&(resolver_threads[t]), NULL, resolver_routine, &(resolve_cpyt[t]));
+	}
+
+	for(t = 0; t < NUM_THREADS; t++)
+        {
+                printf("In main: creating thread %ld\n", t);
+                resolve_cpyt[t] = t;
+                pthread_create(&(requester_threads[t]), NULL, requester_routine, &(request_cpyt[t]));
+        }
+
+	for(t = 0; t < NUM_THREADS; t++)
+	{
+		pthread_join(resolver_threads[t], NULL);
+	}
+
+	for(t = 0; t < NUM_THREADS; t++)
+        {
+                pthread_join(requester_threads[t], NULL);
+        }
+
+	return 0;
 }
