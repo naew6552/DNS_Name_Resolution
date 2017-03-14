@@ -24,6 +24,7 @@
 
 #include "util.h"
 #include "multi-lookup.h"
+#include "queue.h"
 
 #define NUM_THREADS     5
 #define MINARGS 3
@@ -152,9 +153,12 @@ int main(int argc, char* argv[])
 	 */
 
        	/***************************************************************************************
-	 * This section marks the beginning of 2.1, reading in the files and dealing with them
+	 * Creating some queue stuff here:
 	 **************************************************************************************/
 
+	queue q;
+	const int qSize = 10; //this is a test size
+	
 
 	//this stores the threads? 
 	pthread_t resolver_threads[NUM_THREADS]; //used to store the identifiers for the threads
