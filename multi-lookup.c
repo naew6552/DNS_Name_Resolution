@@ -31,14 +31,13 @@
 #define MAX_RESOLVER_THREADS 10
 #define MIN_RESOLVER_THREADS 2
 #define MAX_NAME_LENGTH 1025
-#define MAX_IP_LENGTH "INET6 ADDRSTRLEN"
 #define USAGE "<inputFilePath> <outputFilePath>"
 #define SBUFSIZE 1025
 #define INPUTFS "%1024s"
 
 
 //Requester Thread routine, reads from name file and adds names to queue
-void* requester_routine(void* request)
+void* requester_routine(void* input)
 {
        /* Open the file from the filepointer stored in request.
 	* 	use while loop for loop throuhg each line of file
@@ -53,8 +52,23 @@ void* requester_routine(void* request)
 	
         // Currently, request is going to be used as the threadID
 	// This code has been taken from pthread_hello.c as test code.
-	long tid = (long)request;
+	request* in = input;
+	long* tid = in->id;
 	long t;
+	char line [MAX_NAME_LENGTH];
+	char firstipstr[INET6_ADDRSTRLEN];
+	
+	printf("Hello World! It's me, requester_thread #%ld!\n", *tid);
+	while (fscanf(in->fp, INPUTFS, line) > 0)
+	{
+		if(dnslookup(line, firstipstr, sizeof(firstipstr)) == UTIL_FAILURE)
+		{
+                	fprintf(stderr, "dnslookup error: %s\n", line);
+                	strncpy(firstipstr, "", sizeof(firstipstr));
+           	 }
+		printf("%s,%s\n", line, firstipstr);
+		
+	}
 	//long numprint = 3;
 
 	/*
@@ -68,11 +82,9 @@ void* requester_routine(void* request)
                 usleep((rand()%100)*10000+1000000);
         } */
 	
-	printf("Hello World! It's me, thread #%ld!\n", tid);
-	pthread_exit(NULL);	
 
 	/* Exit, Returning NULL*/
-	//return NULL;
+	return NULL;
 }
 
 // Resolver thread routine, will grab name's DNS, and write to result.txt
@@ -96,7 +108,7 @@ void* resolver_routine(void* resolve)
 
         // Currently, request is going to be used as the threadID
 	// This code has been taken from pthread_hello.c as test code.
-        long tid = (long)resolve;
+        long* tid = resolve;
         long t;
         long numprint = 3;
 
@@ -112,11 +124,11 @@ void* resolver_routine(void* resolve)
         }
 	*/
 
-	printf("Hello World! It's me, thread #%ld!\n", tid);
-        pthread_exit(NULL);
+	printf("Hello World! It's me, resolver_thread #%ld!\n", *tid);
+        //pthread_exit(NULL);
 
         /* Exit, Returning NULL*/
-        //return NULL;
+        return NULL;
 
 }
 
@@ -139,34 +151,43 @@ int main(int argc, char* argv[])
 	 * 		
 	 */
 
+       	/***************************************************************************************
+	 * This section marks the beginning of 2.1, reading in the files and dealing with them
+	 **************************************************************************************/
+
+
 	//this stores the threads? 
 	pthread_t resolver_threads[NUM_THREADS]; //used to store the identifiers for the threads
-	pthread_t requester_threads[NUM_THREADS];
+	pthread_t requester_threads[argc-1];
 	int rc; // used for error checking, stands for return code
 	long t; // Keeps track of which thread we're dealing with
 	long resolve_cpyt[NUM_THREADS]; //I don't know what this does
-	long request_cpyt[NUM_THREADS];
+	long request_cpyt[argc-1];
+	request inputs[argc-1];
 	
-	for(t = 0; t < NUM_THREADS; t++)
+	/*for(t = 0; t < NUM_THREADS; t++)
 	{
-		printf("In main: creating thread %ld\n", t);
+		printf("In main: creating resolver_thread %ld\n", t);
 		resolve_cpyt[t] = t;
 		pthread_create(&(resolver_threads[t]), NULL, resolver_routine, &(resolve_cpyt[t]));
-	}
+	}*/
 
-	for(t = 0; t < NUM_THREADS; t++)
+	for(t = 0; t < argc-1; t++)
         {
-                printf("In main: creating thread %ld\n", t);
-                resolve_cpyt[t] = t;
-                pthread_create(&(requester_threads[t]), NULL, requester_routine, &(request_cpyt[t]));
+                printf("In main: creating requester_thread %ld\n", t);
+                //request_cpyt[t] = t;
+		t = (long)t;
+		inputs[t].id = &t;	
+		inputs[t].fp = fopen(argv[t+1], "r");
+                pthread_create(&(requester_threads[t]), NULL, requester_routine, &(inputs[t]));
         }
 
-	for(t = 0; t < NUM_THREADS; t++)
+	/*for(t = 0; t < NUM_THREADS; t++)
 	{
 		pthread_join(resolver_threads[t], NULL);
-	}
+	}*/
 
-	for(t = 0; t < NUM_THREADS; t++)
+	for(t = 0; t < argc-1; t++)
         {
                 pthread_join(requester_threads[t], NULL);
         }

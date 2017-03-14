@@ -12,16 +12,17 @@
 
 typedef struct request_struct
 {
-	int nothin = 0;
+	FILE *fp;
+	long* id;
 } request;
 
 //hold info for thread id, result file, offset, ect...
 typedef struct resolve_struct
 {
-	int nothin = 0;
+	int nothing;
 } resolve;
 
-void* requester_routine(void* request);
+void* requester_routine(void* input);
 void* resolver_routine(void* resolve);
 
 #endif
