@@ -1,4 +1,4 @@
-/***********************332*******************************************************
+/******************************************************************************
  * FILE: multi-lookup.c
  * DESCRIPTION:
  *   A Pthreaded solution to DNS lookup
@@ -21,7 +21,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <semaphore.h>
 
 #include "util.h"
 #include "multi-lookup.h"
@@ -55,32 +54,24 @@ void* requester_routine(void* input)
         // Currently, request is going to be used as the threadID
 	// This code has been taken from pthread_hello.c as test code.
 	request* in = input;
-	long* tid = in->id;
+	long tid = in->id;
 	long t;
 	char line [MAX_NAME_LENGTH];
-	printf("Hello World! It's me, requester_thread #%ld!\n", *tid);
-	//long numprint = 3;
-
-	while (fscanf(in->inFile, INPUTFS, line) > 0)
-        {
-		//printf("%s\n", line);
-		while(queue_is_full(in -> q) == 1)
+	char firstipstr[INET6_ADDRSTRLEN];
+	
+	printf("Hello World! It's me, requester_thread %ld!\n", tid);
+	while (fscanf(in->fp, INPUTFS, line) > 0)
+	{
+		if(dnslookup(line, firstipstr, sizeof(firstipstr)) == UTIL_FAILURE)
 		{
-			usleep((rand()%100)+1);
-		}
-		sem_wait(in -> binary);
-		if(queue_push(in -> q, (void*)line) == QUEUE_FAILURE)
-		{
-			fprintf(stderr,
-        	            	"error: queue_push failed!\n"
-                	    	"Value: %s\n"
-	                	,line);
-
-		}
-		sem_post(in ->binary);
-		printf("%s, added to queue\n", line);
+                	fprintf(stderr, "dnslookup error: %s\n", line);
+                	strncpy(firstipstr, "", sizeof(firstipstr));
+           	 }
+		printf("%s, %s, %ld\n", line, firstipstr, tid);
 		
 	}
+	//long numprint = 3;
+
 	/*
         * Print hello numprint times *
 	for(t=0; t<numprint; t++)
@@ -98,7 +89,7 @@ void* requester_routine(void* input)
 }
 
 // Resolver thread routine, will grab name's DNS, and write to result.txt
-void* resolver_routine(void* out)
+void* resolver_routine(void* resolve)
 {
        /* first, grab a name from the resuest queue. To do this, full is = 0 initially.
 	*	When requester_routine runs, it will V(full) which means there is a name to grab.
@@ -118,12 +109,9 @@ void* resolver_routine(void* out)
 
         // Currently, request is going to be used as the threadID
 	// This code has been taken from pthread_hello.c as test code.
-	resolve* output;
-	output = out; 
-        long* tid = output -> id;
-	long t;
+        long* tid = resolve;
+        long t;
         long numprint = 3;
-	char* line; // [MAX_NAME_LENGTH];
 
 	/*
         * Print hello numprint times *
@@ -137,45 +125,7 @@ void* resolver_routine(void* out)
         }
 	*/
 
-
 	printf("Hello World! It's me, resolver_thread #%ld!\n", *tid);
-
-	while(queue_is_empty(output -> q) != 1)
-	{
-		sem_wait(output -> binary);
-		if((line = queue_pop(output -> q)) == NULL)
-		{
-			fprintf(stderr, "error: queue_pop failed!\n");
-		}
-		else
-		{
-			printf("%s pulled from queue\n", line);
-		}
-		sem_post(output -> binary);
-		
-	}	
-
-	/*
-	char line [MAX_NAME_LENGTH];
-	char firstipstr[INET6_ADDRSTRLEN];
-	while (fscanf(in->fp, INPUTFS, line) > 0)
-	{
-		if(dnslookup(line, firstipstr, sizeof(firstipstr)) == UTIL_FAILURE)
-		{
-                	fprintf(stderr, "dnslookup error: %s\n", line);
-                	strncpy(firstipstr, "", sizeof(firstipstr));
-           	 }
-		printf("%s,%s\n", line, firstipstr);
-
-		
-	
-		if(queue_is_empty(&q) == 1) {return NULL};
-		sem_wait(&binary);
-		queue_push(&q, (void*)
-		
-	}
-	*/
-
         //pthread_exit(NULL);
 
         /* Exit, Returning NULL*/
@@ -205,25 +155,19 @@ int main(int argc, char* argv[])
        	/***************************************************************************************
 	 * Creating some queue stuff here:
 	 **************************************************************************************/
+
 	queue q;
 	const int qSize = 10; //this is a test size
-	queue_init(&q, qSize); //should be in if for error checking
-
-	/**************************************************************************************
-	 * Creating and initializing a semaphore
-	 *************************************************************************************/
-	sem_t binary;
-	sem_init(&binary, 0, 1); //use if == -1 for error checking
 	
 
 	//this stores the threads? 
 	pthread_t resolver_threads[NUM_THREADS]; //used to store the identifiers for the threads
-	pthread_t requester_threads[argc-2];
+	pthread_t requester_threads[argc-1];
 	int rc; // used for error checking, stands for return code
 	long t; // Keeps track of which thread we're dealing with
 	long resolve_cpyt[NUM_THREADS]; //I don't know what this does
-	long request_cpyt[argc-2];
-	request inputs[argc-2];
+	long request_cpyt[argc-1];
+	request inputs[argc-1];
 	
 	/*for(t = 0; t < NUM_THREADS; t++)
 	{
@@ -232,28 +176,15 @@ int main(int argc, char* argv[])
 		pthread_create(&(resolver_threads[t]), NULL, resolver_routine, &(resolve_cpyt[t]));
 	}*/
 
-	for(t = 0; t < argc-2; t++)
+	for(t = 0; t < argc-1; t++)
         {
                 printf("In main: creating requester_thread %ld\n", t);
                 //request_cpyt[t] = t;
 		t = (long)t;
-		inputs[t].id = &t;	
-		inputs[t].inFile = fopen(argv[t+1], "r");
-		inputs[t].q = &q;
-		inputs[t].binary = &binary;
+		inputs[t].id = t;	
+		inputs[t].fp = fopen(argv[t+1], "r");
                 pthread_create(&(requester_threads[t]), NULL, requester_routine, &(inputs[t]));
         }
-	
-	
-	printf("In main: creating requester_thread %ld\n", t);
-	//request_cpyt[t] = t;
-	long temp = 1;
-	resolve output;
-	output.id = &temp;	
-	output.outFile = fopen(argv[argc-1], "a+");
-	output.q = &q;
-	output.binary = &binary;
-	pthread_create(&(resolver_threads[temp]), NULL, resolver_routine, &(output));
 
 	/*for(t = 0; t < NUM_THREADS; t++)
 	{
@@ -264,8 +195,6 @@ int main(int argc, char* argv[])
         {
                 pthread_join(requester_threads[t], NULL);
         }
-	
-	pthread_join(resolver_threads[temp], NULL);
 
 	return 0;
 }

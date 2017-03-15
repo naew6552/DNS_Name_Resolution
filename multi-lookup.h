@@ -15,7 +15,7 @@
 
 typedef struct request_struct
 {
-	FILE *fp;
+	FILE *inFile;
 	long* id;
 	queue* q;
 	sem_t *binary;
@@ -25,10 +25,13 @@ typedef struct request_struct
 //hold info for thread id, result file, offset, ect...
 typedef struct resolve_struct
 {
-	int nothing;
+	FILE *outFile;
+	long* id;
+	queue* q;
+	sem_t *binary;
 } resolve;
 
 void* requester_routine(void* input);
-void* resolver_routine(void* resolve);
+void* resolver_routine(void* out);
 
 #endif
