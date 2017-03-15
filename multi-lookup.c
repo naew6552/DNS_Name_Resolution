@@ -1,4 +1,4 @@
-/******************************************************************************
+/***********************332*******************************************************
  * FILE: multi-lookup.c
  * DESCRIPTION:
  *   A Pthreaded solution to DNS lookup
@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <semaphore.h>
 
 #include "util.h"
 #include "multi-lookup.h"
@@ -57,21 +58,29 @@ void* requester_routine(void* input)
 	long* tid = in->id;
 	long t;
 	char line [MAX_NAME_LENGTH];
-	char firstipstr[INET6_ADDRSTRLEN];
-	
 	printf("Hello World! It's me, requester_thread #%ld!\n", *tid);
-	while (fscanf(in->fp, INPUTFS, line) > 0)
-	{
-		if(dnslookup(line, firstipstr, sizeof(firstipstr)) == UTIL_FAILURE)
-		{
-                	fprintf(stderr, "dnslookup error: %s\n", line);
-                	strncpy(firstipstr, "", sizeof(firstipstr));
-           	 }
-		printf("%s,%s\n", line, firstipstr);
-		
-	}
 	//long numprint = 3;
 
+	while (fscanf(in->fp, INPUTFS, line) > 0)
+        {
+		//printf("%s\n", line);
+		while(queue_is_full(in -> q) == 1)
+		{
+			usleep((rand()%100)+1);
+		}
+		sem_wait(in -> binary);
+		if(queue_push(in -> q, (void*)line) == QUEUE_FAILURE)
+		{
+			fprintf(stderr,
+        	            	"error: queue_push failed!\n"
+                	    	"Value: %s\n"
+	                	,line);
+
+		}
+		sem_post(in ->binary);
+		printf("%s, added to queue\n", line);
+		
+	}
 	/*
         * Print hello numprint times *
 	for(t=0; t<numprint; t++)
@@ -125,6 +134,27 @@ void* resolver_routine(void* resolve)
         }
 	*/
 
+	/*
+	char line [MAX_NAME_LENGTH];
+	char firstipstr[INET6_ADDRSTRLEN];
+	while (fscanf(in->fp, INPUTFS, line) > 0)
+	{
+		if(dnslookup(line, firstipstr, sizeof(firstipstr)) == UTIL_FAILURE)
+		{
+                	fprintf(stderr, "dnslookup error: %s\n", line);
+                	strncpy(firstipstr, "", sizeof(firstipstr));
+           	 }
+		printf("%s,%s\n", line, firstipstr);
+
+		
+	
+		if(queue_is_empty(&q) == 1) {return NULL};
+		sem_wait(&binary);
+		queue_push(&q, (void*)
+		
+	}
+	*/
+
 	printf("Hello World! It's me, resolver_thread #%ld!\n", *tid);
         //pthread_exit(NULL);
 
@@ -155,9 +185,15 @@ int main(int argc, char* argv[])
        	/***************************************************************************************
 	 * Creating some queue stuff here:
 	 **************************************************************************************/
-
 	queue q;
 	const int qSize = 10; //this is a test size
+	queue_init(&q, qSize); //should be in if for error checking
+
+	/**************************************************************************************
+	 * Creating and initializing a semaphore
+	 *************************************************************************************/
+	sem_t binary;
+	sem_init(&binary, 0, 1); //use if == -1 for error checking
 	
 
 	//this stores the threads? 
@@ -183,6 +219,8 @@ int main(int argc, char* argv[])
 		t = (long)t;
 		inputs[t].id = &t;	
 		inputs[t].fp = fopen(argv[t+1], "r");
+		inputs[t].q = &q;
+		inputs[t].binary = &binary;
                 pthread_create(&(requester_threads[t]), NULL, requester_routine, &(inputs[t]));
         }
 

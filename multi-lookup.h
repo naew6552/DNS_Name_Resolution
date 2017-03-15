@@ -10,10 +10,16 @@
 #ifndef MULTILOOKUP_H
 #define MULTILOOKUP_H
 
+#include "queue.h"
+#include <semaphore.h>
+
 typedef struct request_struct
 {
 	FILE *fp;
 	long* id;
+	queue* q;
+	sem_t *binary;
+	
 } request;
 
 //hold info for thread id, result file, offset, ect...
