@@ -66,20 +66,25 @@ void* requester_routine(void* input)
 		//printf("%s\n", line);
 		while(queue_is_full(in -> q) == 1)
 		{
+			printf("requester: #%ld is waiting\n", *tid);
 			usleep((rand()%100)+1);
 		}
-		sem_wait(in -> binary);
-		if(queue_push(in -> q, (void*)line) == QUEUE_FAILURE)
+		printf("Request Pre sem\n");
+		sem_wait(in -> empty);
+		sem_wait(in -> mutex);
+		/*if(queue_push(in -> q, (void*)line) == QUEUE_FAILURE)
 		{
 			fprintf(stderr,
         	            	"error: queue_push failed!\n"
                 	    	"Value: %s\n"
 	                	,line);
 
-		}
-		sem_post(in ->binary);
+		}*/
+		queue_push(in -> q, (void*)line);
 		printf("%s, added to queue\n", line);
-		
+		sem_post(in ->mutex);
+		sem_post(in -> full);
+		printf("Request post sem\n");
 	}
 	/*
         * Print hello numprint times *
@@ -140,18 +145,24 @@ void* resolver_routine(void* out)
 
 	printf("Hello World! It's me, resolver_thread #%ld!\n", *tid);
 
-	while(queue_is_empty(output -> q) != 1)
+	while(queue_is_empty(output -> q) == 0)
 	{
-		sem_wait(output -> binary);
-		if((line = queue_pop(output -> q)) == NULL)
+		printf("Resolver pre sem");
+		sem_wait(output -> full);
+		sem_wait(output -> mutex);
+		/*if((line = queue_pop(output -> q)) == NULL)
 		{
 			fprintf(stderr, "error: queue_pop failed!\n");
 		}
 		else
 		{
 			printf("%s pulled from queue\n", line);
-		}
-		sem_post(output -> binary);
+		}*/
+		line = queue_pop(output -> q);
+		printf("%s pulled from queue\n", line);
+		sem_post(output -> mutex);
+		sem_post(output -> empty);
+		printf("Resolver post sem");
 		
 	}	
 
@@ -170,7 +181,7 @@ void* resolver_routine(void* out)
 		
 	
 		if(queue_is_empty(&q) == 1) {return NULL};
-		sem_wait(&binary);
+		sem_wait(&mutex);
 		queue_push(&q, (void*)
 		
 	}
@@ -212,9 +223,13 @@ int main(int argc, char* argv[])
 	/**************************************************************************************
 	 * Creating and initializing a semaphore
 	 *************************************************************************************/
-	sem_t binary;
-	sem_init(&binary, 0, 1); //use if == -1 for error checking
-	
+	sem_t mutex;
+	sem_t empty;
+	sem_t full;
+	sem_init(&mutex, 0, 1); //use if == -1 for error checking
+	sem_init(&empty, 0, qSize-1);
+	sem_init(&full, 0, qSize-1);
+		
 
 	//this stores the threads? 
 	pthread_t resolver_threads[NUM_THREADS]; //used to store the identifiers for the threads
@@ -231,6 +246,16 @@ int main(int argc, char* argv[])
 		resolve_cpyt[t] = t;
 		pthread_create(&(resolver_threads[t]), NULL, resolver_routine, &(resolve_cpyt[t]));
 	}*/
+	long temp = 1;
+	resolve output;
+	output.id = &temp;	
+	output.outFile = fopen(argv[argc-1], "a+");
+	output.q = &q;
+	output.mutex = &mutex;
+	output.empty = &empty;
+	output.full = &full;
+	pthread_create(&(resolver_threads[temp]), NULL, resolver_routine, &(output));
+
 
 	for(t = 0; t < argc-2; t++)
         {
@@ -240,21 +265,15 @@ int main(int argc, char* argv[])
 		inputs[t].id = &t;	
 		inputs[t].inFile = fopen(argv[t+1], "r");
 		inputs[t].q = &q;
-		inputs[t].binary = &binary;
+		inputs[t].mutex = &mutex;
+		inputs[t].empty = &empty;
+		inputs[t].full = &full;
                 pthread_create(&(requester_threads[t]), NULL, requester_routine, &(inputs[t]));
         }
 	
 	
 	printf("In main: creating requester_thread %ld\n", t);
 	//request_cpyt[t] = t;
-	long temp = 1;
-	resolve output;
-	output.id = &temp;	
-	output.outFile = fopen(argv[argc-1], "a+");
-	output.q = &q;
-	output.binary = &binary;
-	pthread_create(&(resolver_threads[temp]), NULL, resolver_routine, &(output));
-
 	/*for(t = 0; t < NUM_THREADS; t++)
 	{
 		pthread_join(resolver_threads[t], NULL);

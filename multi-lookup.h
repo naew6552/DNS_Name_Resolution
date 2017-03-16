@@ -18,7 +18,9 @@ typedef struct request_struct
 	FILE *inFile;
 	long* id;
 	queue* q;
-	sem_t *binary;
+	sem_t *mutex;
+	sem_t *empty;
+	sem_t *full;	
 	
 } request;
 
@@ -28,7 +30,9 @@ typedef struct resolve_struct
 	FILE *outFile;
 	long* id;
 	queue* q;
-	sem_t *binary;
+	sem_t *mutex;
+	sem_t *empty;
+	sem_t *full;
 } resolve;
 
 void* requester_routine(void* input);
