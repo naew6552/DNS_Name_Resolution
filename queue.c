@@ -100,3 +100,16 @@ void queue_cleanup(queue* q)
 
     free(q->array);
 }
+
+void queue_print(queue* q)
+{
+    int i = q -> front;
+    char* line;
+    printf("Front: %i, Back: %i\n", q->front, q->rear);
+    while(i != q -> rear);
+    {
+	line = q -> array[i].payload;
+	printf("%s\n", line);
+	i = (i + 1) % q -> maxSize;
+    }
+}

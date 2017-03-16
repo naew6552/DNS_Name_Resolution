@@ -57,19 +57,24 @@ void* requester_routine(void* input)
 	request* in = input;
 	long* tid = in->id;
 	long t;
-	char line [MAX_NAME_LENGTH];
+	char* line; // [MAX_NAME_LENGTH];
 	printf("Hello World! It's me, requester_thread #%ld!\n", *tid);
 	//long numprint = 3;
 
 	while (fscanf(in->inFile, INPUTFS, line) > 0)
         {
 		//printf("%s\n", line);
+		char* queueInput;
+		queueInput = malloc(sizeof(char) * MAX_NAME_LENGTH);
+		strncpy(queueInput, line, MAX_NAME_LENGTH);
+		//printf("%s\n", queueInput);
 		while(queue_is_full(in -> q) == 1)
 		{
 			printf("requester: #%ld is waiting\n", *tid);
 			usleep((rand()%100)+1);
 		}
-		printf("Request Pre sem\n");
+		//printf("Request Pre sem\n");
+		
 		sem_wait(in -> empty);
 		sem_wait(in -> mutex);
 		/*if(queue_push(in -> q, (void*)line) == QUEUE_FAILURE)
@@ -80,11 +85,13 @@ void* requester_routine(void* input)
 	                	,line);
 
 		}*/
-		queue_push(in -> q, (void*)line);
-		printf("%s, added to queue\n", line);
+		//printf("Adding to queue\n");
+		queue_push(in -> q, queueInput);
+		printf("%s, added to queue\n", queueInput);
+		//queue_print(in -> q);
 		sem_post(in ->mutex);
 		sem_post(in -> full);
-		printf("Request post sem\n");
+		//printf("Request post sem\n");
 	}
 	/*
         * Print hello numprint times *
@@ -145,9 +152,14 @@ void* resolver_routine(void* out)
 
 	printf("Hello World! It's me, resolver_thread #%ld!\n", *tid);
 
-	while(queue_is_empty(output -> q) == 0)
+	//while(queue_is_empty(output -> q) == 0)
+	while(1)
 	{
-		printf("Resolver pre sem");
+		//printf("Resolver pre sem\n");
+		if(queue_is_empty(output -> q) == 1)
+		{
+			pthread_yield();
+		}
 		sem_wait(output -> full);
 		sem_wait(output -> mutex);
 		/*if((line = queue_pop(output -> q)) == NULL)
@@ -158,11 +170,13 @@ void* resolver_routine(void* out)
 		{
 			printf("%s pulled from queue\n", line);
 		}*/
+		//printf("Popping from queue\n");
 		line = queue_pop(output -> q);
 		printf("%s pulled from queue\n", line);
 		sem_post(output -> mutex);
 		sem_post(output -> empty);
-		printf("Resolver post sem");
+		//queue_print(output -> q);
+		//printf("Resolver post sem\n");
 		
 	}	
 
@@ -228,7 +242,7 @@ int main(int argc, char* argv[])
 	sem_t full;
 	sem_init(&mutex, 0, 1); //use if == -1 for error checking
 	sem_init(&empty, 0, qSize-1);
-	sem_init(&full, 0, qSize-1);
+	sem_init(&full, 0, 0);
 		
 
 	//this stores the threads? 
@@ -254,6 +268,7 @@ int main(int argc, char* argv[])
 	output.mutex = &mutex;
 	output.empty = &empty;
 	output.full = &full;
+	printf("In main: creating resolver_thread 0\n");
 	pthread_create(&(resolver_threads[temp]), NULL, resolver_routine, &(output));
 
 
@@ -272,7 +287,7 @@ int main(int argc, char* argv[])
         }
 	
 	
-	printf("In main: creating requester_thread %ld\n", t);
+	//printf("In main: creating requester_thread %ld\n", t);
 	//request_cpyt[t] = t;
 	/*for(t = 0; t < NUM_THREADS; t++)
 	{

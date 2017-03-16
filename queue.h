@@ -64,4 +64,6 @@ void* queue_pop(queue* q);
 /* Function to free queue memory */
 void queue_cleanup(queue* q);
 
+void queue_print(queue* q);
+
 #endif
