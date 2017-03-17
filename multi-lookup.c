@@ -63,7 +63,7 @@ void* requester_routine(void* input)
 
 	while (fscanf(in->inFile, INPUTFS, line) > 0)
         {
-		//printf("%s\n", line);
+		//printf("Start Requester While\n");
 		char* queueInput;
 		queueInput = malloc(sizeof(char) * MAX_NAME_LENGTH);
 		strncpy(queueInput, line, MAX_NAME_LENGTH);
@@ -136,6 +136,7 @@ void* resolver_routine(void* out)
 	long t;
         long numprint = 3;
 	char* line; // [MAX_NAME_LENGTH];
+	char ipstr[INET6_ADDRSTRLEN];
 
 	/*
         * Print hello numprint times *
@@ -155,11 +156,12 @@ void* resolver_routine(void* out)
 	//while(queue_is_empty(output -> q) == 0)
 	while(1)
 	{
-		//printf("Resolver pre sem\n");
+		//printf("In resolver while\n");
 		if(queue_is_empty(output -> q) == 1)
 		{
-			pthread_yield();
+			return NULL;
 		}
+		//printf("Resolver pre sem\n");
 		sem_wait(output -> full);
 		sem_wait(output -> mutex);
 		/*if((line = queue_pop(output -> q)) == NULL)
@@ -177,6 +179,17 @@ void* resolver_routine(void* out)
 		sem_post(output -> empty);
 		//queue_print(output -> q);
 		//printf("Resolver post sem\n");
+
+		if(dnslookup(line, ipstr, sizeof(ipstr)) == UTIL_FAILURE)
+		{               		
+			fprintf(stderr, "dnslookup error: %s\n", line);
+               		 strncpy(ipstr, "", sizeof(ipstr));
+            	}
+		
+		printf("line: %s, ip: %s\n", line, ipstr);
+		sem_wait(output -> mutex2);	
+		fprintf(output -> outFile, "%s, %s\n", line, ipstr);
+		sem_post(output -> mutex2);
 		
 	}	
 
@@ -232,53 +245,55 @@ int main(int argc, char* argv[])
 	 **************************************************************************************/
 	queue q;
 	const int qSize = 10; //this is a test size
-	queue_init(&q, qSize); //should be in if for error checking
+	if(queue_init(&q, qSize) == QUEUE_FAILURE)
+	{
+        	fprintf(stderr, "error: queue_init failed!\n");
+	}
 
 	/**************************************************************************************
 	 * Creating and initializing a semaphore
 	 *************************************************************************************/
 	sem_t mutex;
+	sem_t mutex2;
 	sem_t empty;
 	sem_t full;
 	sem_init(&mutex, 0, 1); //use if == -1 for error checking
-	sem_init(&empty, 0, qSize-1);
+	sem_init(&mutex2, 0, 1);
+	sem_init(&empty, 0, qSize);
 	sem_init(&full, 0, 0);
 		
 
 	//this stores the threads? 
-	pthread_t resolver_threads[NUM_THREADS]; //used to store the identifiers for the threads
+	pthread_t resolver_threads[MAX_RESOLVER_THREADS]; //used to store the identifiers for the threads
 	pthread_t requester_threads[argc-2];
 	int rc; // used for error checking, stands for return code
 	long t; // Keeps track of which thread we're dealing with
-	long resolve_cpyt[NUM_THREADS]; //I don't know what this does
-	long request_cpyt[argc-2];
-	request inputs[argc-2];
-	
+	long resolve_cpyt[MAX_RESOLVER_THREADS]; //I don't know what this does
+	long request_cpyt[argc-1];
+	request inputs[argc-1];
+	resolve outputs[MAX_RESOLVER_THREADS];
 	/*for(t = 0; t < NUM_THREADS; t++)
 	{
 		printf("In main: creating resolver_thread %ld\n", t);
 		resolve_cpyt[t] = t;
 		pthread_create(&(resolver_threads[t]), NULL, resolver_routine, &(resolve_cpyt[t]));
 	}*/
-	long temp = 1;
-	resolve output;
-	output.id = &temp;	
-	output.outFile = fopen(argv[argc-1], "a+");
-	output.q = &q;
-	output.mutex = &mutex;
-	output.empty = &empty;
-	output.full = &full;
-	printf("In main: creating resolver_thread 0\n");
-	pthread_create(&(resolver_threads[temp]), NULL, resolver_routine, &(output));
+	
+	//long temp;
 
-
-	for(t = 0; t < argc-2; t++)
+	for(t = 1; t < (argc-1); t++)
         {
                 printf("In main: creating requester_thread %ld\n", t);
                 //request_cpyt[t] = t;
-		t = (long)t;
+		//temp = (long)t;
 		inputs[t].id = &t;	
-		inputs[t].inFile = fopen(argv[t+1], "r");
+		printf("opening: %s\n", argv[t]);
+		inputs[t].inFile = fopen(argv[t], "r");
+		if(!inputs[t].inFile)
+		{
+			perror("Error Opening Input File");
+			return EXIT_FAILURE;
+		}
 		inputs[t].q = &q;
 		inputs[t].mutex = &mutex;
 		inputs[t].empty = &empty;
@@ -286,6 +301,35 @@ int main(int argc, char* argv[])
                 pthread_create(&(requester_threads[t]), NULL, requester_routine, &(inputs[t]));
         }
 	
+
+	FILE* outputfp = NULL;
+	outputfp = fopen(argv[(argc-1)], "a");
+   	if(!outputfp)
+	{
+        	perror("Error Opening Output File");
+        	return EXIT_FAILURE;
+	}
+
+
+
+	for(t = 0; t < MAX_RESOLVER_THREADS; t++)
+	{
+		//temp = (long)t;
+		outputs[t].id = &t;	
+		outputs[t].outFile = outputfp;
+		if(!outputs[t].outFile)
+		{
+			perror("Error Opening Output File");
+			return EXIT_FAILURE;
+		}
+		outputs[t].q = &q;
+		outputs[t].mutex = &mutex;
+		outputs[t].mutex2 = &mutex2;
+		outputs[t].empty = &empty;
+		outputs[t].full = &full;
+		printf("In main: creating resolver_thread %ld\n", t+1);
+		pthread_create(&(resolver_threads[t]), NULL, resolver_routine, &(outputs[t]));
+	}
 	
 	//printf("In main: creating requester_thread %ld\n", t);
 	//request_cpyt[t] = t;
@@ -299,7 +343,12 @@ int main(int argc, char* argv[])
                 pthread_join(requester_threads[t], NULL);
         }
 	
-	pthread_join(resolver_threads[temp], NULL);
+	for(t = 0; t < MAX_RESOLVER_THREADS; t++)
+	{
+		pthread_join(resolver_threads[t], NULL);
+	}
+
+	fclose(outputfp);
 
 	return 0;
 }

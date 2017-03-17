@@ -31,6 +31,7 @@ typedef struct resolve_struct
 	long* id;
 	queue* q;
 	sem_t *mutex;
+	sem_t *mutex2;
 	sem_t *empty;
 	sem_t *full;
 } resolve;
